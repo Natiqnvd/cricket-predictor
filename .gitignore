@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pkl
+
+
+# Virtual environments
+.venv/
+.env/
+
+
+# IDE / Editor files
+.vscode/
+.idea/
+*.swp
+
+
+# Byte-compiled / cache
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+
+# Distribution / build
+build/
+dist/
+*.egg-info/
+
+
+# Docker
+*.log
+
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+
+# Environment files
+.env
+.env.*
+
+
+# Coverage
+htmlcov/
+.coverage
+.coverage.*
+.cache
+
+
+# Poetry
+poetry.lock
