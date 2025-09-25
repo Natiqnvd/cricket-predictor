@@ -1,19 +1,18 @@
-[project]
+[tool.poetry]
 name = "cricket-predictor"
 version = "0.1.0"
-description = "probability calculator for cricket matches based on various factors"
-authors = [
-    {name = "Natiq Naveed",email = "Natiqnvd@gmail.com"}
-]
+description = "Probability calculator for cricket matches based on various factors"
+authors = ["Natiq Naveed <Natiqnvd@gmail.com>"]
 readme = "README.md"
-requires-python = ">=3.13,<3.14"
-dependencies = [
-    "alembic (>=1.16.5,<2.0.0)",
-    "fastapi (>=0.117.1,<0.118.0)",
-    "loguru (>=0.7.3,<0.8.0)",
-    "uvicorn[standard] (>=0.30,<0.31)",
-    "pydantic (>=2.8,<3.0)",
-]
+
+[tool.poetry.dependencies]
+python = ">=3.13,<3.14"
+alembic = ">=1.16.5,<2.0.0"
+fastapi = ">=0.117.1,<0.118.0"
+loguru = ">=0.7.3,<0.8.0"
+uvicorn = {extras = ["standard"], version = ">=0.30,<0.31"}
+pydantic = ">=2.8,<3.0"
+sqlalchemy = "^2.0.43"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8.3,<9.0"
