@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from loguru import logger
-from app.api import router as api_router
+# from api import router as api_router
 from app.core.config import settings
 from app.db.session import init_engine, close_engine
 
@@ -26,4 +26,4 @@ app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
 async def health():
     return {"status": "ok"}
 
-app.include_router(api_router, prefix="/api")
+# app.include_router(api_router, prefix="/api")
