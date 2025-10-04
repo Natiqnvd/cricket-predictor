@@ -3,7 +3,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship, declarative_base
-from app.models.db_enums import MatchFormat, TossDecision, WicketType, PlayerRole, BallPhase
+from core.enums import MatchFormat, TossDecision, WicketType, PlayerRole, BallPhase
 
 Base = declarative_base()
 
@@ -15,7 +15,9 @@ class Team(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False, unique=True)
     country = Column(String, nullable=True)
-
+    code = Column(String, nullable=True)
+    type = Column(String, nullable=True)
+    
     players = relationship("Player", back_populates="team")
     matches_home = relationship("Match", foreign_keys="Match.home_team_id")
     matches_away = relationship("Match", foreign_keys="Match.away_team_id")
@@ -25,6 +27,8 @@ class Player(Base):
     __tablename__ = "players"
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)
+    dob = Column(DateTime, nullable=True)
+    place_of_birth = Column(String, nullable=True)
     batting_style = Column(String, nullable=True)
     bowling_style = Column(String, nullable=True)
     role = Column(Enum(PlayerRole), nullable=True)
@@ -32,24 +36,6 @@ class Player(Base):
     team_id = Column(Integer, ForeignKey(Team.id, ondelete="SET NULL"), index=True)
     team = relationship("Team", back_populates="players")
 
-    availability = relationship("PlayerAvailability", back_populates="player")
-
-
-class PlayerAvailability(Base):
-    """
-    Tracks whether a player is available for a match, injured, or rested.
-    """
-    __tablename__ = "player_availability"
-    id = Column(Integer, primary_key=True)
-    player_id = Column(Integer, ForeignKey(Player.id, ondelete="CASCADE"), index=True)
-    match_id = Column(Integer, ForeignKey("matches.id", ondelete="CASCADE"), index=True)
-    is_available = Column(Boolean, default=True)
-    reason = Column(String, nullable=True)  # e.g., "Injured", "Rested"
-    last_updated = Column(DateTime, nullable=False)
-
-    player = relationship(Player, back_populates="availability")
-    match = relationship("Match")
- 
 
 class Tournament(Base):
     __tablename__ = "tournaments"
