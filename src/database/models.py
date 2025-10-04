@@ -1,103 +1,169 @@
-from sqlalchemy import (
-    Column, Integer, String, Float, Boolean, DateTime, ForeignKey, Enum, Index, UniqueConstraint
-)
+from sqlalchemy import String, Integer, Float, Boolean, DateTime, ForeignKey, Enum, Text, Index, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import relationship, declarative_base
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from typing import Optional, List
+from datetime import datetime, timezone
+
 from core.enums import MatchFormat, TossDecision, WicketType, PlayerRole, BallPhase
 
-Base = declarative_base()
+class Base(DeclarativeBase):
+    pass
 
 # ------------------------
 # Core Entities
 # ------------------------
 class Team(Base):
     __tablename__ = "teams"
-    id = Column(Integer, primary_key=True)
-    name = Column(String, nullable=False, unique=True)
-    country = Column(String, nullable=True)
-    code = Column(String, nullable=True)
-    type = Column(String, nullable=True)
     
-    players = relationship("Player", back_populates="team")
-    matches_home = relationship("Match", foreign_keys="Match.home_team_id")
-    matches_away = relationship("Match", foreign_keys="Match.away_team_id")
-
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    country: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    code: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    type: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    
+    # Relationships
+    players: Mapped[List["Player"]] = relationship("Player", back_populates="team")
+    matches_as_team_a: Mapped[List["Match"]] = relationship(
+        "Match", foreign_keys="Match.team_a_id", back_populates="team_a"
+    )
+    matches_as_team_b: Mapped[List["Match"]] = relationship(
+        "Match", foreign_keys="Match.team_b_id", back_populates="team_b"
+    )
 
 class Player(Base):
     __tablename__ = "players"
-    id = Column(Integer, primary_key=True)
-    name = Column(String, nullable=False)
-    dob = Column(DateTime, nullable=True)
-    place_of_birth = Column(String, nullable=True)
-    batting_style = Column(String, nullable=True)
-    bowling_style = Column(String, nullable=True)
-    role = Column(Enum(PlayerRole), nullable=True)
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    dob: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    place_of_birth: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    batting_style: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    bowling_style: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
-    team_id = Column(Integer, ForeignKey(Team.id, ondelete="SET NULL"), index=True)
-    team = relationship("Team", back_populates="players")
+    team_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("teams.id", ondelete="SET NULL"), index=True
+    )
+    team: Mapped[Optional["Team"]] = relationship("Team", back_populates="players")
+    
+    # Additional relationships
+    player_roles: Mapped[List["PlayerRole"]] = relationship("PlayerRole", back_populates="player")
+    player_specialties: Mapped[List["PlayerSpecialty"]] = relationship("PlayerSpecialty", back_populates="player")
 
+class PlayerRole(Base):
+    __tablename__ = "player_roles"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id"))
+    role: Mapped[PlayerRole] = mapped_column(Enum(PlayerRole))
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=True)
+    format: Mapped[MatchFormat] = mapped_column(Enum(MatchFormat))
+    
+    player: Mapped["Player"] = relationship("Player", back_populates="player_roles")
+
+class PlayerSpecialty(Base):
+    __tablename__ = "player_specialties"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id"))
+    specialty: Mapped[str] = mapped_column(String)
+    rating: Mapped[float] = mapped_column(Float)
+    
+    player: Mapped["Player"] = relationship("Player", back_populates="player_specialties")
 
 class Tournament(Base):
     __tablename__ = "tournaments"
-    id = Column(Integer, primary_key=True)
-    name = Column(String, nullable=False)
-    season = Column(String, nullable=True)
-    start_date = Column(DateTime, nullable=True)
-    end_date = Column(DateTime, nullable=True)
-    format = Column(Enum(MatchFormat), nullable=False)
-
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    season: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    start_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    end_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    format: Mapped[MatchFormat] = mapped_column(Enum(MatchFormat), nullable=False)
+    
+    # Relationships
+    matches: Mapped[List["Match"]] = relationship("Match", back_populates="tournament")
 
 class Stadium(Base):
     __tablename__ = "stadiums"
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False, unique=True)
-    city = Column(String, nullable=False)
-    country = Column(String, nullable=False)
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    city: Mapped[str] = mapped_column(String, nullable=False)
+    country: Mapped[str] = mapped_column(String, nullable=False)
 
-    pitch_type = Column(String, nullable=True)
-    bounce_rating = Column(Float, nullable=True)
-    grass_coverage = Column(Float, nullable=True)
-    cracks_present = Column(Boolean, default=False)
-    avg_first_innings_score = Column(Float, nullable=True)
-    favor_spin = Column(Boolean, default=False)
-    favor_pace = Column(Boolean, default=False)
+    pitch_type: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    bounce_rating: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    grass_coverage: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    cracks_present: Mapped[bool] = mapped_column(Boolean, default=False)
+    avg_first_innings_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    favor_spin: Mapped[bool] = mapped_column(Boolean, default=False)
+    favor_pace: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    matches = relationship("Match", back_populates="stadium")
-
+    matches: Mapped[List["Match"]] = relationship("Match", back_populates="stadium")
 
 class Match(Base):
     __tablename__ = "matches"
-    id = Column(Integer, primary_key=True)
-    tournament_id = Column(Integer, ForeignKey(Tournament.id, ondelete="CASCADE"), index=True)
-    match_date = Column(DateTime, nullable=False)
-    format = Column(Enum(MatchFormat), nullable=False)
-    stadium_id = Column(Integer, ForeignKey(Stadium.id))
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tournament_id: Mapped[int] = mapped_column(
+        ForeignKey("tournaments.id", ondelete="CASCADE"), index=True
+    )
+    match_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    format: Mapped[MatchFormat] = mapped_column(Enum(MatchFormat), nullable=False)
+    stadium_id: Mapped[int] = mapped_column(ForeignKey("stadiums.id"))
 
-    home_team_id = Column(Integer, ForeignKey(Team.id))
-    away_team_id = Column(Integer, ForeignKey(Team.id))
-    toss_winner_id = Column(Integer, ForeignKey(Team.id))
-    toss_decision = Column(Enum(TossDecision), nullable=True)
-    winner_id = Column(Integer, ForeignKey(Team.id), nullable=True)
-    result = Column(String, nullable=True)
+    team_a_id: Mapped[int] = mapped_column(ForeignKey("teams.id"))
+    team_b_id: Mapped[int] = mapped_column(ForeignKey("teams.id"))
+    neutral_venue: Mapped[bool] = mapped_column(Boolean, default=False)
+    toss_winner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("teams.id"), nullable=True)
+    toss_decision: Mapped[Optional[TossDecision]] = mapped_column(Enum(TossDecision), nullable=True)
+    winner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("teams.id"), nullable=True)
+    result: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
-    tournament = relationship(Tournament)
-    home_team = relationship(Team, foreign_keys=[home_team_id])
-    away_team = relationship(Team, foreign_keys=[away_team_id])
-    stadium = relationship(Stadium, back_populates="matches")
+    # Relationships
+    tournament: Mapped["Tournament"] = relationship("Tournament", back_populates="matches")
+    team_a: Mapped["Team"] = relationship("Team", foreign_keys=[team_a_id], back_populates="matches_as_team_a")
+    team_b: Mapped["Team"] = relationship("Team", foreign_keys=[team_b_id], back_populates="matches_as_team_b")
+    stadium: Mapped["Stadium"] = relationship("Stadium", back_populates="matches")
+    pitch_conditions: Mapped[List["PitchConditions"]] = relationship("PitchConditions", back_populates="match")
+    weather_data: Mapped[List["WeatherData"]] = relationship("WeatherData", back_populates="match")
+    innings: Mapped[List["Innings"]] = relationship("Innings", back_populates="match")
+    player_stats: Mapped[List["PlayerStats"]] = relationship("PlayerStats", back_populates="match")
 
+class PitchConditions(Base):
+    __tablename__ = "pitch_conditions"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    match_id: Mapped[int] = mapped_column(ForeignKey("matches.id"))
+    stadium_id: Mapped[int] = mapped_column(ForeignKey("stadiums.id"))
+    
+    # Dynamic pitch metrics
+    hardness_rating: Mapped[Optional[float]] = mapped_column(Float)
+    moisture_content: Mapped[Optional[float]] = mapped_column(Float)
+    wear_level: Mapped[Optional[float]] = mapped_column(Float)
+    predicted_behavior: Mapped[Optional[str]] = mapped_column(String)
+    
+    assessed_by: Mapped[Optional[str]] = mapped_column(String)
+    assessment_time: Mapped[Optional[datetime]] = mapped_column(DateTime)
+
+    match: Mapped["Match"] = relationship("Match", back_populates="pitch_conditions")
+    stadium: Mapped["Stadium"] = relationship("Stadium")
 
 class WeatherData(Base):
     __tablename__ = "weather_data"
-    id = Column(Integer, primary_key=True)
-    match_id = Column(Integer, ForeignKey(Match.id, ondelete="CASCADE"), index=True)
-    temperature_c = Column(Float, nullable=True)
-    humidity = Column(Float, nullable=True)
-    wind_speed_kph = Column(Float, nullable=True)
-    precipitation_mm = Column(Float, nullable=True)
-    condition = Column(String, nullable=True)
-    timestamp = Column(DateTime, nullable=True)
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    match_id: Mapped[int] = mapped_column(
+        ForeignKey("matches.id", ondelete="CASCADE"), index=True
+    )
+    temperature_c: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    humidity: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    wind_speed_kph: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    precipitation_mm: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    condition: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    timestamp: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
-    match = relationship(Match)
+    match: Mapped["Match"] = relationship("Match", back_populates="weather_data")
 
 
 # ------------------------
@@ -105,75 +171,106 @@ class WeatherData(Base):
 # ------------------------
 class Innings(Base):
     __tablename__ = "innings"
-    id = Column(Integer, primary_key=True)
-    match_id = Column(Integer, ForeignKey(Match.id, ondelete="CASCADE"), index=True)
-    batting_team_id = Column(Integer, ForeignKey(Team.id))
-    bowling_team_id = Column(Integer, ForeignKey(Team.id))
-    innings_number = Column(Integer, nullable=False)
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    match_id: Mapped[int] = mapped_column(
+        ForeignKey("matches.id", ondelete="CASCADE"), index=True
+    )
+    batting_team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"))
+    bowling_team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"))
+    innings_number: Mapped[int] = mapped_column(Integer, nullable=False)
 
-    total_runs = Column(Integer, default=0)
-    total_wickets = Column(Integer, default=0)
-    overs_completed = Column(Float, default=0.0)
+    total_runs: Mapped[int] = mapped_column(Integer, default=0)
+    total_wickets: Mapped[int] = mapped_column(Integer, default=0)
+    overs_completed: Mapped[float] = mapped_column(Float, default=0.0)
 
-    match = relationship(Match)
-    batting_team = relationship(Team, foreign_keys=[batting_team_id])
-    bowling_team = relationship(Team, foreign_keys=[bowling_team_id])
-
+    match: Mapped["Match"] = relationship("Match", back_populates="innings")
+    batting_team: Mapped["Team"] = relationship("Team", foreign_keys=[batting_team_id])
+    bowling_team: Mapped["Team"] = relationship("Team", foreign_keys=[bowling_team_id])
+    overs: Mapped[List["Over"]] = relationship("Over", back_populates="innings")
 
 class Over(Base):
     __tablename__ = "overs"
-    id = Column(Integer, primary_key=True)
-    innings_id = Column(Integer, ForeignKey(Innings.id, ondelete="CASCADE"), index=True)
-    over_number = Column(Integer, nullable=False)
-    bowler_id = Column(Integer, ForeignKey(Player.id))
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    innings_id: Mapped[int] = mapped_column(
+        ForeignKey("innings.id", ondelete="CASCADE"), index=True
+    )
+    over_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    bowler_id: Mapped[int] = mapped_column(ForeignKey("players.id"))
 
-    innings = relationship(Innings)
-    bowler = relationship(Player)
-
+    innings: Mapped["Innings"] = relationship("Innings", back_populates="overs")
+    bowler: Mapped["Player"] = relationship("Player")
+    balls: Mapped[List["Ball"]] = relationship("Ball", back_populates="over")
 
 class Ball(Base):
     __tablename__ = "balls"
-    id = Column(Integer, primary_key=True)
-    over_id = Column(Integer, ForeignKey(Over.id, ondelete="CASCADE"), index=True)
-    ball_number = Column(Integer, nullable=False)
-    batsman_id = Column(Integer, ForeignKey(Player.id))
-    non_striker_id = Column(Integer, ForeignKey(Player.id))
-    bowler_id = Column(Integer, ForeignKey(Player.id))
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    over_id: Mapped[int] = mapped_column(
+        ForeignKey("overs.id", ondelete="CASCADE"), index=True
+    )
+    ball_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    batsman_id: Mapped[int] = mapped_column(ForeignKey("players.id"))
+    non_striker_id: Mapped[int] = mapped_column(ForeignKey("players.id"))
+    bowler_id: Mapped[int] = mapped_column(ForeignKey("players.id"))
 
-    runs_scored = Column(Integer, default=0)
-    extras_type = Column(String, nullable=True)
-    extras_runs = Column(Integer, default=0)
-    wicket_type = Column(Enum(WicketType), nullable=True)
-    player_out_id = Column(Integer, ForeignKey(Player.id), nullable=True)
+    runs_scored: Mapped[int] = mapped_column(Integer, default=0)
+    extras_type: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    extras_runs: Mapped[int] = mapped_column(Integer, default=0)
+    wicket_type: Mapped[Optional[WicketType]] = mapped_column(Enum(WicketType), nullable=True)
+    player_out_id: Mapped[Optional[int]] = mapped_column(ForeignKey("players.id"), nullable=True)
 
-    is_boundary = Column(Boolean, default=False)
-    is_six = Column(Boolean, default=False)
-    is_powerplay = Column(Boolean, default=False)
-    phase = Column(Enum(BallPhase), nullable=True)
-    timestamp = Column(DateTime)
+    is_boundary: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_six: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_powerplay: Mapped[bool] = mapped_column(Boolean, default=False)
+    phase: Mapped[Optional[BallPhase]] = mapped_column(Enum(BallPhase), nullable=True)
+    timestamp: Mapped[Optional[datetime]] = mapped_column(DateTime)
 
-    over = relationship(Over)
-    batsman = relationship(Player, foreign_keys=[batsman_id])
+    over: Mapped["Over"] = relationship("Over", back_populates="balls")
+    batsman: Mapped["Player"] = relationship("Player", foreign_keys=[batsman_id])
+    ball_tracking: Mapped[Optional["BallTracking"]] = relationship("BallTracking", back_populates="ball")
+    
+class BallTracking(Base):
+    __tablename__ = "ball_tracking"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ball_id: Mapped[int] = mapped_column(ForeignKey("balls.id"))
+    
+    # Hawk-Eye equivalent data
+    release_speed: Mapped[Optional[float]] = mapped_column(Float)
+    bounce_point: Mapped[Optional[float]] = mapped_column(Float)
+    swing_angle: Mapped[Optional[float]] = mapped_column(Float)
+    seam_position: Mapped[Optional[float]] = mapped_column(Float)
+    impact_point_bat: Mapped[Optional[dict]] = mapped_column(JSONB)
+    
+    # Outcome predictions
+    expected_runs: Mapped[Optional[float]] = mapped_column(Float)
+    wicket_probability: Mapped[Optional[float]] = mapped_column(Float)
 
+    ball: Mapped["Ball"] = relationship("Ball", back_populates="ball_tracking")
 
 # ------------------------
 # Player / Team Stats
 # ------------------------
 class PlayerStats(Base):
     __tablename__ = "player_stats"
-    id = Column(Integer, primary_key=True)
-    player_id = Column(Integer, ForeignKey(Player.id), index=True)
-    match_id = Column(Integer, ForeignKey(Match.id, ondelete="CASCADE"), index=True)
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id"), index=True)
+    match_id: Mapped[int] = mapped_column(
+        ForeignKey("matches.id", ondelete="CASCADE"), index=True
+    )
 
-    runs_scored = Column(Integer, default=0)
-    balls_faced = Column(Integer, default=0)
-    wickets_taken = Column(Integer, default=0)
-    overs_bowled = Column(Float, default=0.0)
-    economy_rate = Column(Float, nullable=True)
-    strike_rate = Column(Float, nullable=True)
+    runs_scored: Mapped[int] = mapped_column(Integer, default=0)
+    balls_faced: Mapped[int] = mapped_column(Integer, default=0)
+    wickets_taken: Mapped[int] = mapped_column(Integer, default=0)
+    overs_bowled: Mapped[float] = mapped_column(Float, default=0.0)
+    economy_rate: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    strike_rate: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
-    player = relationship(Player)
-    match = relationship(Match)
+    player: Mapped["Player"] = relationship("Player", back_populates="player_stats")
+    match: Mapped["Match"] = relationship("Match", back_populates="player_stats")
 
     __table_args__ = (
         UniqueConstraint("player_id", "match_id", name="uq_player_match_stats"),
@@ -182,29 +279,32 @@ class PlayerStats(Base):
 
 class TeamStats(Base):
     __tablename__ = "team_stats"
-    id = Column(Integer, primary_key=True)
-    team_id = Column(Integer, ForeignKey(Team.id), index=True, nullable=False)
-    tournament_id = Column(Integer, ForeignKey(Tournament.id), index=True, nullable=True)
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"), index=True, nullable=False)
+    tournament_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("tournaments.id"), index=True, nullable=True
+    )
 
-    matches_played = Column(Integer, default=0)
-    wins = Column(Integer, default=0)
-    losses = Column(Integer, default=0)
-    ties = Column(Integer, default=0)
-    no_results = Column(Integer, default=0)
+    matches_played: Mapped[int] = mapped_column(Integer, default=0)
+    wins: Mapped[int] = mapped_column(Integer, default=0)
+    losses: Mapped[int] = mapped_column(Integer, default=0)
+    ties: Mapped[int] = mapped_column(Integer, default=0)
+    no_results: Mapped[int] = mapped_column(Integer, default=0)
 
-    total_runs_scored = Column(Integer, default=0)
-    total_runs_conceded = Column(Integer, default=0)
-    wickets_taken = Column(Integer, default=0)
-    wickets_lost = Column(Integer, default=0)
+    total_runs_scored: Mapped[int] = mapped_column(Integer, default=0)
+    total_runs_conceded: Mapped[int] = mapped_column(Integer, default=0)
+    wickets_taken: Mapped[int] = mapped_column(Integer, default=0)
+    wickets_lost: Mapped[int] = mapped_column(Integer, default=0)
 
-    net_run_rate = Column(Float, nullable=True)
-    win_percentage = Column(Float, nullable=True)
-    recent_form = Column(String, nullable=True)
+    net_run_rate: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    win_percentage: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    recent_form: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
-    last_updated = Column(DateTime, nullable=False)
+    last_updated: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
-    team = relationship(Team)
-    tournament = relationship(Tournament)
+    team: Mapped["Team"] = relationship("Team")
+    tournament: Mapped[Optional["Tournament"]] = relationship("Tournament")
 
     __table_args__ = (
         UniqueConstraint("team_id", "tournament_id", name="uq_team_tournament_stats"),
@@ -216,25 +316,26 @@ class TeamStats(Base):
 # ------------------------
 class HeadToHeadTeamStats(Base):
     __tablename__ = "head_to_head_team_stats"
-    id = Column(Integer, primary_key=True)
-    team_a_id = Column(Integer, ForeignKey(Team.id), index=True, nullable=False)
-    team_b_id = Column(Integer, ForeignKey(Team.id), index=True, nullable=False)
-    format = Column(Enum(MatchFormat), nullable=False)
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    team_a_id: Mapped[int] = mapped_column(ForeignKey("teams.id"), index=True, nullable=False)
+    team_b_id: Mapped[int] = mapped_column(ForeignKey("teams.id"), index=True, nullable=False)
+    format: Mapped[MatchFormat] = mapped_column(Enum(MatchFormat), nullable=False)
 
-    matches_played = Column(Integer, default=0)
-    team_a_wins = Column(Integer, default=0)
-    team_b_wins = Column(Integer, default=0)
-    ties = Column(Integer, default=0)
-    no_results = Column(Integer, default=0)
+    matches_played: Mapped[int] = mapped_column(Integer, default=0)
+    team_a_wins: Mapped[int] = mapped_column(Integer, default=0)
+    team_b_wins: Mapped[int] = mapped_column(Integer, default=0)
+    ties: Mapped[int] = mapped_column(Integer, default=0)
+    no_results: Mapped[int] = mapped_column(Integer, default=0)
 
-    avg_score_team_a = Column(Float, nullable=True)
-    avg_score_team_b = Column(Float, nullable=True)
-    net_run_rate_a_vs_b = Column(Float, nullable=True)
+    avg_score_team_a: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    avg_score_team_b: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    net_run_rate_a_vs_b: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
-    last_updated = Column(DateTime, nullable=False)
+    last_updated: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
-    team_a = relationship(Team, foreign_keys=[team_a_id])
-    team_b = relationship(Team, foreign_keys=[team_b_id])
+    team_a: Mapped["Team"] = relationship("Team", foreign_keys=[team_a_id])
+    team_b: Mapped["Team"] = relationship("Team", foreign_keys=[team_b_id])
 
     __table_args__ = (
         UniqueConstraint("team_a_id", "team_b_id", "format", name="uq_team_h2h"),
@@ -244,24 +345,25 @@ class HeadToHeadTeamStats(Base):
 
 class PlayerVsBowlerStats(Base):
     __tablename__ = "player_vs_bowler_stats"
-    id = Column(Integer, primary_key=True)
-    batsman_id = Column(Integer, ForeignKey(Player.id), index=True, nullable=False)
-    bowler_id = Column(Integer, ForeignKey(Player.id), index=True, nullable=False)
-    format = Column(Enum(MatchFormat), nullable=False)
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    batsman_id: Mapped[int] = mapped_column(ForeignKey("players.id"), index=True, nullable=False)
+    bowler_id: Mapped[int] = mapped_column(ForeignKey("players.id"), index=True, nullable=False)
+    format: Mapped[MatchFormat] = mapped_column(Enum(MatchFormat), nullable=False)
 
-    balls_faced = Column(Integer, default=0)
-    runs_scored = Column(Integer, default=0)
-    dismissals = Column(Integer, default=0)
-    strike_rate = Column(Float, nullable=True)
-    avg = Column(Float, nullable=True)
+    balls_faced: Mapped[int] = mapped_column(Integer, default=0)
+    runs_scored: Mapped[int] = mapped_column(Integer, default=0)
+    dismissals: Mapped[int] = mapped_column(Integer, default=0)
+    strike_rate: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    avg: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
-    dot_ball_percentage = Column(Float, nullable=True)
-    boundary_percentage = Column(Float, nullable=True)
+    dot_ball_percentage: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    boundary_percentage: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
-    last_updated = Column(DateTime, nullable=False)
+    last_updated: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
-    batsman = relationship(Player, foreign_keys=[batsman_id])
-    bowler = relationship(Player, foreign_keys=[bowler_id])
+    batsman: Mapped["Player"] = relationship("Player", foreign_keys=[batsman_id])
+    bowler: Mapped["Player"] = relationship("Player", foreign_keys=[bowler_id])
 
     __table_args__ = (
         UniqueConstraint("batsman_id", "bowler_id", "format", name="uq_player_bowler_stats"),
@@ -274,33 +376,40 @@ class PlayerVsBowlerStats(Base):
 # ------------------------
 class ProbabilityState(Base):
     __tablename__ = "probability_state"
-    id = Column(Integer, primary_key=True)
-    match_id = Column(Integer, ForeignKey(Match.id, ondelete="CASCADE"), index=True)
-    innings_id = Column(Integer, ForeignKey(Innings.id, ondelete="CASCADE"), index=True)
-    ball_id = Column(Integer, ForeignKey(Ball.id, ondelete="CASCADE"), index=True)
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    match_id: Mapped[int] = mapped_column(
+        ForeignKey("matches.id", ondelete="CASCADE"), index=True
+    )
+    innings_id: Mapped[int] = mapped_column(
+        ForeignKey("innings.id", ondelete="CASCADE"), index=True
+    )
+    ball_id: Mapped[int] = mapped_column(
+        ForeignKey("balls.id", ondelete="CASCADE"), index=True
+    )
 
-    draw_prob = Column(Float, nullable=True)
-    no_result_prob = Column(Float, nullable=True)
-    confidence = Column(Float, nullable=True)
+    draw_prob: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    no_result_prob: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
-    runs_remaining = Column(Integer)
-    balls_remaining = Column(Integer)
-    wickets_remaining = Column(Integer)
+    runs_remaining: Mapped[Optional[int]] = mapped_column(Integer)
+    balls_remaining: Mapped[Optional[int]] = mapped_column(Integer)
+    wickets_remaining: Mapped[Optional[int]] = mapped_column(Integer)
 
-    win_prob_team1 = Column(Float)
-    win_prob_team2 = Column(Float)
+    win_prob_team1: Mapped[Optional[float]] = mapped_column(Float)
+    win_prob_team2: Mapped[Optional[float]] = mapped_column(Float)
 
-    expected_score = Column(Float, nullable=True)
-    features = Column(JSONB, nullable=True)
+    expected_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    features: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
 
-    model_name = Column(String, nullable=True)
-    model_version = Column(String, nullable=True)
-    training_date = Column(DateTime, nullable=True)
-    last_updated = Column(DateTime, nullable=False)
+    model_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    model_version: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    training_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_updated: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
-    match = relationship(Match)
-    innings = relationship(Innings)
-    ball = relationship(Ball)
+    match: Mapped["Match"] = relationship("Match")
+    innings: Mapped["Innings"] = relationship("Innings")
+    ball: Mapped["Ball"] = relationship("Ball")
 
     __table_args__ = (
         Index("ix_prob_state_match_innings_ball", "match_id", "innings_id", "ball_id"),
@@ -308,29 +417,61 @@ class ProbabilityState(Base):
 
 
 # ------------------------
-# Situational Derived Metrics (New)
+# Situational Derived Metrics
 # ------------------------
 class SituationalMetrics(Base):
-    """
-    Precomputed metrics to accelerate probability calculation.
-    Examples: momentum, pressure overs, batting/bowling form, pitch-specific stats.
-    """
     __tablename__ = "situational_metrics"
-    id = Column(Integer, primary_key=True)
-    match_id = Column(Integer, ForeignKey(Match.id, ondelete="CASCADE"), index=True)
-    team_id = Column(Integer, ForeignKey(Team.id, ondelete="CASCADE"), index=True)
-    innings_id = Column(Integer, ForeignKey(Innings.id, ondelete="CASCADE"), index=True, nullable=True)
-    over_id = Column(Integer, ForeignKey(Over.id, ondelete="CASCADE"), index=True, nullable=True)
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    match_id: Mapped[int] = mapped_column(
+        ForeignKey("matches.id", ondelete="CASCADE"), index=True
+    )
+    team_id: Mapped[int] = mapped_column(
+        ForeignKey("teams.id", ondelete="CASCADE"), index=True
+    )
+    innings_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("innings.id", ondelete="CASCADE"), index=True, nullable=True
+    )
+    over_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("overs.id", ondelete="CASCADE"), index=True, nullable=True
+    )
 
-    momentum_index = Column(Float, nullable=True)
-    pressure_overs_index = Column(Float, nullable=True)
-    batting_form_index = Column(Float, nullable=True)
-    bowling_form_index = Column(Float, nullable=True)
-    pitch_adjusted_score = Column(Float, nullable=True)
+    momentum_index: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    pressure_overs_index: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    batting_form_index: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    bowling_form_index: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    pitch_adjusted_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
-    last_updated = Column(DateTime, nullable=False)
+    last_updated: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
-    match = relationship(Match)
-    team = relationship(Team)
-    innings = relationship(Innings)
-    over = relationship(Over)
+    match: Mapped["Match"] = relationship("Match")
+    team: Mapped["Team"] = relationship("Team")
+    innings: Mapped[Optional["Innings"]] = relationship("Innings")
+    over: Mapped[Optional["Over"]] = relationship("Over")
+
+
+class ModelVersion(Base):
+    __tablename__ = "model_versions"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    version: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    features_used: Mapped[Optional[dict]] = mapped_column(JSONB)
+    hyperparameters: Mapped[Optional[dict]] = mapped_column(JSONB)
+    training_data_range: Mapped[Optional[dict]] = mapped_column(JSONB)
+    performance_metrics: Mapped[Optional[dict]] = mapped_column(JSONB)
+    is_production: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class PredictionAudit(Base):
+    __tablename__ = "prediction_audit"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    match_id: Mapped[int] = mapped_column(ForeignKey("matches.id"))
+    model_version_id: Mapped[int] = mapped_column(ForeignKey("model_versions.id"))
+    prediction_time: Mapped[datetime] = mapped_column(DateTime)
+    features_used: Mapped[Optional[dict]] = mapped_column(JSONB)
+    prediction_output: Mapped[Optional[dict]] = mapped_column(JSONB)
+    actual_result: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    prediction_accuracy: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
